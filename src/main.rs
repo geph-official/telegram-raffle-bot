@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
 use acidjson::AcidJson;
 use anyhow::Context;
@@ -35,7 +38,7 @@ static CONFIG: Lazy<Config> = Lazy::new(|| {
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Store {
-    giftcards: Vec<String>,
+    giftcards: BTreeSet<String>,
     participants: Vec<i64>, // list of all chat ids
 }
 
@@ -44,7 +47,7 @@ async fn send_giftcards() -> anyhow::Result<()> {
     let mut store = STORE.read().clone();
     store.participants.shuffle(&mut thread_rng());
     for chat_id in store.participants {
-        if let Some(gc) = store.giftcards.pop() {
+        if let Some(gc) = store.giftcards.pop_first() {
             TELEGRAM
                 .send_msg(Response {
                     text: "Congratulations! You won a giftcard! The code is:".into(),
@@ -68,7 +71,7 @@ async fn send_giftcards() -> anyhow::Result<()> {
 
 static STORE: Lazy<AcidJson<Store>> = Lazy::new(|| {
     AcidJson::open_or_else(Path::new(&CONFIG.store_path), || Store {
-        giftcards: vec![],
+        giftcards: BTreeSet::new(),
         participants: vec![],
     })
     .unwrap()
@@ -96,46 +99,39 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
 
         if username == admin_uname {
             // start raffle
-            let maybe_start_raffle: Result<StartRaffle, _> = serde_json::from_str(msg);
-            if let Ok(mut start_raffle) = maybe_start_raffle {
-                STORE.write().giftcards.append(&mut start_raffle.giftcards);
-                return Ok(to_response("Yay! The raffle has begun!", update)?);
+            if msg.starts_with("#StartRaffle") {
+                for word in msg.split_whitespace() {
+                    if word.chars().all(|c| c.is_uppercase() || c.is_numeric()) && word.len() > 5 {
+                        STORE.write().giftcards.insert(word.to_string());
+                    }
+                }
+                return to_response("Raffle started", update);
             }
             // end raffle
-            if msg == "#EndRaffle" {
+            else if msg == "#EndRaffle" {
                 send_giftcards().await?;
-                return Ok(to_response(
-                    "Horray! We gave out all the gift cards!",
-                    update,
-                )?);
+                return to_response("Horray! We gave out all the gift cards!", update);
             }
             // display participants count
-            if msg == "#ParticipantsCount" {
+            else if msg == "#ParticipantsCount" {
                 let count = STORE.read().participants.len();
-                return Ok(to_response(&count.to_string(), update)?);
+                return to_response(&count.to_string(), update);
             }
             // display giftcards count
-            if msg == "#GiftcardsCount" {
+            else if msg == "#GiftcardsCount" {
                 let count = STORE.read().giftcards.len();
-                return Ok(to_response(&count.to_string(), update)?);
+                return to_response(&count.to_string(), update);
             }
+        } else if STORE.read().giftcards.is_empty() {
+            // no ongoing raffle
+            return to_response("Sorry! There's no ongoing raffle at the moment. Watch out for future raffles in our user group!", update);
         } else {
-            if STORE.read().giftcards.is_empty() {
-                // no ongoing raffle
-                return Ok(
-                    to_response("Sorry! There's no ongoing raffle at the moment. Watch out for future raffles in our user group!", update)?
-                );
-            } else {
-                // exists ongoing raffle
-                let chat_id = update["message"]["chat"]["id"]
-                    .as_i64()
-                    .context("could not get chat id")?;
-                STORE.write().participants.push(chat_id);
-                return Ok(to_response(
-                    "Yay! You've been entered into the raffle!",
-                    update,
-                )?);
-            }
+            // exists ongoing raffle
+            let chat_id = update["message"]["chat"]["id"]
+                .as_i64()
+                .context("could not get chat id")?;
+            STORE.write().participants.push(chat_id);
+            return to_response("Yay! You've been entered into the raffle!", update);
         }
     }
     anyhow::bail!("not responding to this case")
@@ -153,5 +149,7 @@ fn to_response(text: &str, responding_to: Value) -> anyhow::Result<Vec<Response>
 
 fn main() {
     Lazy::force(&TELEGRAM);
-    loop {}
+    loop {
+        std::thread::park();
+    }
 }
