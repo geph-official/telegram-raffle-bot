@@ -16,5 +16,5 @@ serde = {version="1.0.188", features=["derive"]}
 serde_json = "1.0.105"
 serde_yaml = "0.9.25"
 smolscale = "0.3.52"
-# telegram-bot = {git = "https://github.com/geph-official/telegram-bot.git"}
-telegram-bot = {path="../telegram-bot"}
+telegram-bot = {git = "https://github.com/geph-official/telegram-bot.git"}
+# telegram-bot = {path="../telegram-bot"}

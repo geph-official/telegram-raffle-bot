@@ -1398,6 +1398,7 @@ dependencies = [
 [[package]]
 name = "telegram-bot"
 version = "0.1.0"
+source = "git+https://github.com/geph-official/telegram-bot.git#ec26b880ad1a7255110fc3a17727b8b42e11af66"
 dependencies = [
  "anyhow",
  "isahc",
