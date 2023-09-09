@@ -39,14 +39,15 @@ static CONFIG: Lazy<Config> = Lazy::new(|| {
 #[derive(Serialize, Deserialize, Clone)]
 struct Store {
     giftcards: BTreeSet<String>,
-    participants: Vec<i64>, // list of all chat ids
+    participants: BTreeSet<i64>, // list of all chat ids
 }
 
 async fn send_giftcards() -> anyhow::Result<()> {
     // shuffle participants list
     let mut store = STORE.read().clone();
-    store.participants.shuffle(&mut thread_rng());
-    for chat_id in store.participants {
+    let mut participants: Vec<i64> = store.participants.iter().copied().collect();
+    participants.shuffle(&mut thread_rng());
+    for chat_id in participants {
         if let Some(gc) = store.giftcards.pop_first() {
             TELEGRAM
                 .send_msg(Response {
@@ -72,7 +73,7 @@ async fn send_giftcards() -> anyhow::Result<()> {
 static STORE: Lazy<AcidJson<Store>> = Lazy::new(|| {
     AcidJson::open_or_else(Path::new(&CONFIG.store_path), || Store {
         giftcards: BTreeSet::new(),
-        participants: vec![],
+        participants: BTreeSet::new(),
     })
     .unwrap()
 });
@@ -130,7 +131,7 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
             let chat_id = update["message"]["chat"]["id"]
                 .as_i64()
                 .context("could not get chat id")?;
-            STORE.write().participants.push(chat_id);
+            STORE.write().participants.insert(chat_id);
             return to_response("Yay! You've been entered into the raffle!", update);
         }
     }
