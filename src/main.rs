@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use acidjson::AcidJson;
@@ -42,32 +43,38 @@ struct Store {
     participants: BTreeSet<i64>, // list of all chat ids
 }
 
-async fn send_giftcards() -> anyhow::Result<()> {
+async fn send_giftcards() {
     // shuffle participants list
     let mut store = STORE.read().clone();
     let mut participants: Vec<i64> = store.participants.iter().copied().collect();
     participants.shuffle(&mut thread_rng());
     for chat_id in participants {
         if let Some(gc) = store.giftcards.pop_first() {
-            TELEGRAM
-                .send_msg(Response {
-                    text: "Congratulations! You won a giftcard! The code is:".into(),
-                    chat_id,
-                    reply_to_message_id: None,
-                })
-                .await?;
-            TELEGRAM
-                .send_msg(Response {
-                    text: gc,
-                    chat_id,
-                    reply_to_message_id: None,
-                })
-                .await?;
+            let fallible = async {
+                TELEGRAM
+                    .send_msg(Response {
+                        text: "Congratulations! You won a giftcard! The code is:".into(),
+                        chat_id,
+                        reply_to_message_id: None,
+                    })
+                    .await?;
+                TELEGRAM
+                    .send_msg(Response {
+                        text: gc,
+                        chat_id,
+                        reply_to_message_id: None,
+                    })
+                    .await?;
+                anyhow::Ok(())
+            };
+            if let Err(err) = fallible.await {
+                log::error!("error giving out a giftcard to {chat_id}: {:?}", err);
+            }
+            smol::Timer::after(Duration::from_millis(200)).await;
         }
     }
     STORE.write().participants.clear();
     STORE.write().giftcards.clear();
-    Ok(())
 }
 
 static STORE: Lazy<AcidJson<Store>> = Lazy::new(|| {
@@ -110,9 +117,7 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
             }
             // end raffle
             else if msg == "#EndRaffle" {
-                if let Err(err) = send_giftcards().await {
-                    return to_response(&format!("{:?}", err), update);
-                }
+                send_giftcards().await;
                 return to_response("Horray! We gave out all the gift cards!", update);
             }
             // display participants count
