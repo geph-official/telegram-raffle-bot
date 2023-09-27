@@ -68,7 +68,9 @@ async fn send_giftcards() {
                 anyhow::Ok(())
             };
             if let Err(err) = fallible.await {
-                log::error!("error giving out a giftcard to {chat_id}: {:?}", err);
+                eprintln!("error giving out a giftcard to {chat_id}: {:?}", err);
+            } else {
+                eprintln!("gave out a giftcard to {chat_id}");
             }
             smol::Timer::after(Duration::from_millis(200)).await;
         }
@@ -98,7 +100,7 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
     let msg = update["message"]["text"]
         .as_str()
         .context("cannot parse out text")?;
-    log::info!("msg = {msg}");
+    eprintln!("msg = {msg}");
     if update["message"]["chat"]["type"].as_str() == Some("private") {
         let mut username = "";
         if let Some(uname) = update["message"]["from"]["username"].as_str() {
