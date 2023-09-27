@@ -110,7 +110,9 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
             }
             // end raffle
             else if msg == "#EndRaffle" {
-                send_giftcards().await?;
+                if let Err(err) = send_giftcards().await {
+                    return to_response(&format!("{:?}", err), update);
+                }
                 return to_response("Horray! We gave out all the gift cards!", update);
             }
             // display participants count
