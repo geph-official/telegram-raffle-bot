@@ -11,6 +11,7 @@ use once_cell::sync::Lazy;
 use rand::{seq::SliceRandom, thread_rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use smol_timeout::TimeoutExt;
 use telegram_bot::{Response, TelegramBot};
 
 /// raffle bot
@@ -57,7 +58,9 @@ async fn send_giftcards() {
                         chat_id,
                         reply_to_message_id: None,
                     })
-                    .await?;
+                    .timeout(Duration::from_secs(10))
+                    .await
+                    .context("timeout")??;
                 TELEGRAM
                     .send_msg(Response {
                         text: gc,

@@ -1422,6 +1422,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "smol",
+ "smol-timeout",
  "smolscale",
  "telegram-bot",
 ]
