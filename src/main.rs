@@ -119,11 +119,13 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
             if msg.starts_with("#StartRaffle") {
                 let mut store = STORE.write();
                 store.giftcards.clear();
-                let mut words = msg.split_whitespace().skip(1);
-                let secret_code = words.next().filter(|code| code.starts_with("#SecretCode "));
+                let mut lines = msg.split_terminator('\n').skip(1);
+                let secret_code = lines.next().filter(|code| code.starts_with("#SecretCode"));
+                eprintln!("secret code = {secret_code:?}");
                 store.secret_code = secret_code.map(|code| code.replace("#SecretCode ", ""));
-                for word in words {
+                for word in lines {
                     if word.chars().all(|c| c.is_uppercase() || c.is_numeric()) && word.len() > 5 {
+                        eprintln!("inserting {word} into giftcard store!");
                         store.giftcards.insert(word.to_string());
                     }
                 }
