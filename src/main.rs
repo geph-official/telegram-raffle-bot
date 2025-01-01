@@ -55,7 +55,7 @@ async fn send_giftcards() {
             let fallible = async {
                 TELEGRAM
                     .send_msg(Response {
-                        text: "Congratulations! You won a giftcard! The code is:".into(),
+                        text: "Congratulations! You won a giftcard 🎁 The code is:".into(),
                         chat_id,
                         reply_to_message_id: None,
                     })
