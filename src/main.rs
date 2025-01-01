@@ -47,11 +47,11 @@ struct Store {
 
 async fn send_giftcards() {
     // shuffle participants list
-    let mut store = STORE.read().clone();
-    let mut participants: Vec<i64> = store.participants.iter().copied().collect();
+    let mut participants: Vec<i64> = STORE.read().participants.iter().copied().collect();
     participants.shuffle(&mut thread_rng());
     for chat_id in participants {
-        if let Some(gc) = store.giftcards.pop_first() {
+        let gc = STORE.write().giftcards.pop_first();
+        if let Some(gc) = gc {
             let fallible = async {
                 TELEGRAM
                     .send_msg(Response {
