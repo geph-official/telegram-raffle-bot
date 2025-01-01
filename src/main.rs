@@ -55,7 +55,7 @@ async fn send_giftcards() {
             let fallible = async {
                 TELEGRAM
                     .send_msg(Response {
-                        text: "Congratulations! You won a giftcard 🎁 The code is:".into(),
+                        text: "Congratulations! You won a giftcard 🎁 The code is:\n恭喜您中奖！您的迷雾通礼品卡：".into(),
                         chat_id,
                         reply_to_message_id: None,
                     })
@@ -69,6 +69,11 @@ async fn send_giftcards() {
                         reply_to_message_id: None,
                     })
                     .await?;
+                TELEGRAM.send_msg(Response {
+                    text: "To use the giftcard 💳: go to the Geph app --> \"Buy Plus\" or \"Extend\" in the top right corner --> \"Redeem Giftcard\"\nOr pass on the gift to someone else!\n如何使用礼品卡 💳：打开 Geph 应用 --> 点击右上角的“购买 Plus”或“延长” --> “兑换礼品卡”\n您也可以将礼品卡转送给其他人！".into(),
+                    chat_id,
+                    reply_to_message_id: None,
+                }).await?;
                 anyhow::Ok(())
             };
             if let Err(err) = fallible.await {
@@ -148,7 +153,7 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
             }
         } else if STORE.read().giftcards.is_empty() {
             // no ongoing raffle
-            return to_response("Sorry! There's no ongoing raffle at the moment. Watch out for future raffles in our user group!", update);
+            return to_response("Sorry! There's no ongoing raffle at the moment. Watch out for future raffles in our user group or Twitter!\n目前没有正在进行的抽奖活动。请关注我们的用户群或推特，不要错过未来的抽奖活动！\nhttps://x.com/GephOfficial", update);
         } else {
             // exists ongoing raffle
             let chat_id = update["message"]["chat"]["id"]
@@ -157,11 +162,14 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
             let mut store = STORE.write();
             if let Some(secret_code) = &store.secret_code {
                 if !msg.contains(secret_code) {
-                    return to_response("⛔ Incorrect secret code! Please provide the correct code to enter the raffle 🔑", update);
+                    return to_response("⛔ Incorrect secret code! Please provide the correct code to enter the raffle\n密码错误！请提供正确的密码以参加抽奖 🔑", update);
                 }
             }
             store.participants.insert(chat_id);
-            return to_response("🎉 Yay! You've been entered into the raffle!", update);
+            return to_response(
+                "🎉 Yay! You've been entered into the raffle!\n太棒了！您已成功加入抽奖！",
+                update,
+            );
         }
     }
     anyhow::bail!("not responding to this case")
