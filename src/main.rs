@@ -42,6 +42,7 @@ static CONFIG: Lazy<Config> = Lazy::new(|| {
 struct Store {
     giftcards: BTreeSet<String>,
     participants: BTreeSet<i64>, // list of all chat ids
+    secret_code: Option<String>,
 }
 
 async fn send_giftcards() {
@@ -74,6 +75,8 @@ async fn send_giftcards() {
                 eprintln!("error giving out a giftcard to {chat_id}: {:?}", err);
             } else {
                 eprintln!("gave out a giftcard to {chat_id}");
+                STORE.write().participants.remove(&chat_id);
+                eprintln!("removed {chat_id} from participants");
             }
             smol::Timer::after(Duration::from_millis(200)).await;
         }
@@ -86,6 +89,7 @@ static STORE: Lazy<AcidJson<Store>> = Lazy::new(|| {
     AcidJson::open_or_else(Path::new(&CONFIG.store_path), || Store {
         giftcards: BTreeSet::new(),
         participants: BTreeSet::new(),
+        secret_code: None,
     })
     .unwrap()
 });
@@ -113,9 +117,14 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
         if username == admin_uname {
             // start raffle
             if msg.starts_with("#StartRaffle") {
-                for word in msg.split_whitespace() {
+                let mut store = STORE.write();
+                store.giftcards.clear();
+                let mut words = msg.split_whitespace().skip(1);
+                let secret_code = words.next().filter(|code| code.starts_with("#SecretCode "));
+                store.secret_code = secret_code.map(|code| code.replace("#SecretCode ", ""));
+                for word in words {
                     if word.chars().all(|c| c.is_uppercase() || c.is_numeric()) && word.len() > 5 {
-                        STORE.write().giftcards.insert(word.to_string());
+                        store.giftcards.insert(word.to_string());
                     }
                 }
                 return to_response("Raffle started", update);
@@ -143,8 +152,14 @@ async fn telegram_msg_handler(update: Value) -> anyhow::Result<Vec<Response>> {
             let chat_id = update["message"]["chat"]["id"]
                 .as_i64()
                 .context("could not get chat id")?;
-            STORE.write().participants.insert(chat_id);
-            return to_response("Yay! You've been entered into the raffle!", update);
+            let mut store = STORE.write();
+            if let Some(secret_code) = &store.secret_code {
+                if !msg.contains(secret_code) {
+                    return to_response("⛔ Incorrect secret code! Please provide the correct code to enter the raffle 🔑", update);
+                }
+            }
+            store.participants.insert(chat_id);
+            return to_response("🎉 Yay! You've been entered into the raffle!", update);
         }
     }
     anyhow::bail!("not responding to this case")
